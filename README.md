@@ -1,129 +1,157 @@
-# 🎵 KKBox 음악 추천 대회 (Kaggle)
+# KKBox 음악 추천 대회 (Kaggle)
 
-> KKBox Music Recommendation Challenge에 참가하며, **피처 엔지니어링 중심의 접근**으로 유저의 재청취 확률을 예측합니다.
-> pipeline v3 → v9까지 반복 실험하며, **데이터 누수(Target Leakage) 발견 → 해결** 과정을 거쳤습니다.
+## 동기
+
+[음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recomender-lifecycle-based) 프로젝트에서 사람이 직접 설계한 피처(스킵률 변화, 재생 빈도 추세 등)로 추천 알고리즘을 만들었지만, **실제로 이 접근이 얼마나 유효한지 정량적으로 검증할 수 없었다.** 서비스를 배포할 수 없으니 사용자 만족도를 측정할 방법이 없었기 때문이다.
+
+이 한계를 보완하기 위해, 실제 대규모 음악 청취 데이터가 제공되는 [KKBox Music Recommendation Challenge](https://www.kaggle.com/c/kkbox-music-recommendation-challenge)에 참가했다. 목표는 두 가지였다:
+
+1. 피처 엔지니어링 중심의 추천이 대규모 데이터에서도 통하는가?
+2. 사람이 만든 피처 vs 모델이 스스로 학습하는 피처, 어디까지 갈 수 있는가?
 
 ---
 
-## 📌 프로젝트 요약
+## 프로젝트 개요
 
 | 항목 | 내용 |
 |------|------|
 | **대회** | [KKBox Music Recommendation Challenge](https://www.kaggle.com/c/kkbox-music-recommendation-challenge) |
-| **목표** | 유저가 곡을 재청취할 확률 예측 (AUC 기준) |
-| **모델** | LightGBM (Gradient Boosting) |
-| **데이터** | 730만 행 (train), 유저 3만명, 곡 35만곡 |
-| **최종 성과** | Public LB AUC 0.67+ |
+| **과제** | 유저가 곡을 재청취할 확률 예측 (이진 분류, AUC 기준) |
+| **데이터** | train 730만 행, 유저 3만명, 곡 35만곡 |
+| **모델** | LightGBM |
+| **기간** | 약 2주 (v3~v9, 7회 반복 실험) |
 
 ---
 
-## 🔄 파이프라인 진화 과정
+## 실험 과정: 시행착오와 개선
 
-이 프로젝트의 핵심은 **실험 → 실패 → 원인 분석 → 개선**의 반복입니다.
+### v3 — 시작: 기본 피처만으로는 부족하다
 
 ```
-v3  │ 기본 피처 (source, song_length, language)
-    │ → Local AUC 0.72, Kaggle 0.62
-    │ 
-v4  │ Target Encoding 추가 (유저별/곡별 재청취율)
-    │ → Local AUC 0.96 🤯 ... Kaggle 0.58 💀
-    │ → 데이터 누수 발견!
-    │
-v5  │ Out-of-Fold Target Encoding + Smoothing으로 누수 해결
-    │ → Local AUC 0.71, Kaggle 0.65
-    │
-v7  │ 시퀀스 피처 추가 (직전 곡과의 관계)
-    │ → Kaggle 0.65 유지
-    │
-v8  │ SVD 임베딩 (유저-곡 잠재 벡터 32차원)
-    │ → Kaggle 0.67 달성
-    │
-v9  │ Song2Vec 스타디 (Word2Vec으로 곡 임베딩)
-    │ → 실험적 시도, 유의미한 개선 없음
+사용 피처: source_system_tab, source_screen_name, source_type, song_length, language, genre
+결과:      Kaggle AUC 0.60
 ```
+
+KKBox가 제공하는 메타데이터만으로는 한계가 있었다. "어떤 유저가 어떤 곡을 좋아하는가"에 대한 정보가 피처에 없었기 때문이다.
 
 ---
 
-## 🚨 핵심 교훈: Target Leakage 사건
+### v4 — Target Encoding 도입, 그리고 데이터 누수
 
-v4에서 Local AUC가 **0.96**으로 치솟았지만 Kaggle 점수는 **0.58**로 폭락.
+유저별/곡별 재청취율을 피처로 추가하면 되지 않을까?
 
 ```
-원인:
-  Target Encoding을 할 때 각 행의 target 값이 자기 자신의 인코딩에 포함됨
-  → 모델이 "정답을 보고 정답을 맞추는" 상황
-  → Local 검증에서는 높은 점수, 실전에서는 무의미
-
-해결 (v5):
-  Out-of-Fold Target Encoding 적용
-  → 5-Fold로 분할, 각 fold의 target은 나머지 fold의 통계로만 계산
-  → Smoothing 추가: count가 적은 카테고리는 전체 평균으로 수렴
-  → Local 0.71, Kaggle 0.65로 정상화
+추가 피처: user_target_mean (유저별 재청취율), song_target_mean (곡별 재청취율)
+결과:      Kaggle AUC 0.62
 ```
 
-이 경험은 **"좋아 보이는 점수가 항상 진짜는 아니다"**는 것을 체감하게 해준 사건이었습니다.
+Kaggle 점수가 올랐지만, local 검증에서는 0.96이라는 비현실적인 점수가 나왔다.
+
+**원인 분석**: Target Encoding 시 각 행의 target 값이 해당 행의 인코딩에 포함되고 있었다. 즉, 모델이 "정답을 보고 정답을 맞추는" 상황이었다. Local 검증에서는 이 누수가 드러나지 않았고, 실전 제출에서야 비로소 문제가 확인되었다.
+
+**교훈**: 좋아 보이는 점수가 항상 진짜는 아니다. 특히 Target Encoding은 구현 방식에 따라 쉽게 누수가 발생한다.
 
 ---
 
-## 📊 피처 엔지니어링 상세
+### v5 — 누수 해결: Out-of-Fold Target Encoding
 
-### 기본 피처
-- `source_system_tab`, `source_screen_name`, `source_type` → Label Encoding
-- `song_length`, `language`, `genre_ids` (1st genre 추출)
-- `registered_via`, `city` (유저 프로필)
+```
+수정: 5-Fold 분할, 각 행의 target encoding은 해당 행이 포함되지 않은 fold의 통계로만 계산
+추가: Smoothing 적용 — 출현 횟수가 적은 유저/곡은 전체 평균으로 수렴
+결과: Kaggle AUC 0.65
+```
 
-### 통계 피처 (OOF Target Encoding)
-- 유저별 재청취율, 곡별 재청취율, 아티스트별 재청취율
-- 유저의 전체 청취 횟수, 곡의 전체 등장 횟수
-
-### SVD 임베딩 (v8~)
-- 유저-곡 상호작용 행렬 → TruncatedSVD → 32차원 잠재 벡터
-- 유저 벡터: "이 유저는 어떤 취향인가"
-- 곡 벡터: "이 곡은 어떤 특성인가"
-
-### 시퀀스 피처 (v7~)
-- 직전 곡과 같은 아티스트인가?
-- 직전 곡과 같은 장르인가?
-- 연속 청취 길이 (세션 위치)
+local 점수가 크게 하락했지만, 이것이 진짜 실력이다. Kaggle에서도 안정적인 점수가 나왔고, 이후 모든 버전에서 이 방식을 유지했다.
 
 ---
 
-## 📁 프로젝트 구조
+### v7 — 시퀀스 피처: 행과 행 사이의 관계
+
+```
+추가 피처: 직전 곡과 같은 아티스트인가, 같은 장르인가, 세션 내 위치
+결과:      Kaggle AUC 0.65 (유의미한 개선 없음)
+```
+
+트리 모델(LightGBM)은 각 행을 독립적으로 판단하기 때문에, "이전 곡과의 관계"를 피처로 만들어 넣어도 효과가 제한적이었다. 시퀀스 정보를 자연스럽게 활용하려면 RNN이나 Transformer 같은 시퀀스 모델이 필요하다는 것을 체감했다.
+
+---
+
+### v8 — SVD 임베딩: 유저-곡 잠재 벡터
+
+```
+추가: 유저-곡 상호작용 행렬 → TruncatedSVD → 32차원 잠재 벡터
+      유저 벡터 32개 + 곡 벡터 32개 = 64개 피처 추가
+결과: Kaggle AUC 0.70
+```
+
+이 버전에서 처음으로 유의미한 개선이 나왔다. SVD는 "이 유저와 이 곡이 잠재 공간에서 얼마나 가까운가"를 모델에게 알려주는 역할을 했다. 사람이 직접 설계할 수 없는 피처를 행렬 분해가 자동으로 만들어낸 셈이다.
+
+---
+
+### v9 — SVD 변형 실험
+
+```
+시도: SVD 차원 증가(64차원), 가중치 방식 변경(log-count) 등 실험
+결과: Kaggle AUC 0.71
+```
+
+SVD 차원을 늘리거나 가중치를 바꿔도 극적인 개선은 없었다. 행렬 분해 방식으로 얻을 수 있는 정보량에 한계가 있다는 것을 확인했고, 별도로 Song2Vec(Word2Vec 기반 곡 임베딩)도 실험했으나 SVD와 중복되는 정보가 많아 유의미한 차이는 없었다.
+
+---
+
+## 전체 결과 요약
+
+| 버전 | 핵심 변경 | Kaggle AUC | 비고 |
+|------|-----------|------------|------|
+| v1 | 최초 파이프라인 | 0.58 | 베이스라인 |
+| v3 | Source 피처 추가 | 0.60 | |
+| v4 | Target Encoding | 0.62 | 데이터 누수 (local 0.96) |
+| v5 | OOF Target Encoding | 0.65 | 누수 해결 |
+| v6~v7 | 시퀀스 피처 | 0.65 | 개선 없음 |
+| v8 | SVD 임베딩 | 0.70 | 도약 |
+| v9 | SVD 변형 실험 | **0.71** | 최종 |
+
+---
+
+## 느낀 점
+
+**데이터 누수는 실전에서만 드러난다.** local 검증에서 0.96이 나왔을 때 "이상하다"고 느끼는 감각이 중요했다. 이 경험 이후 모든 프로젝트에서 "이 점수가 진짜인가?"를 먼저 의심하게 되었다.
+
+**트리 모델은 분류를 자동으로 해준다.** 이전 음악 프로젝트에서 "이 곡은 Zone 2(듣다보니 좋아짐)인가, Zone 3(질린 곡)인가"를 사람이 직접 기준을 만들어 분류했다. 그런데 LightGBM은 이런 분류를 스스로 해버린다. 트리의 분기(split) 자체가 곧 분류이기 때문에, "스킵률 30% 이상이면 AND 재생 횟수 10회 이하이면" 같은 규칙을 사람이 피처로 만들어줄 필요가 없다. 트리가 알아서 그 조합을 찾아낸다.
+
+**그러면 사람이 만들어줘야 하는 피처는 무엇인가.** 트리 모델이 스스로 할 수 없는 것 — 즉, "행과 행 사이의 관계"를 계산한 피처가 진짜 차별점이었다. v3~v7까지 만든 AND 조건 피처(장르가 같으면서 재생 횟수가 높은 경우 등)로는 Kaggle 점수가 움직이지 않았다. 반면 SVD는 "이 유저의 전체 청취 패턴"과 "이 곡의 전체 청취 패턴"을 행렬 분해로 요약한 것이고, 이것은 개별 행만 보는 트리가 절대 스스로 만들 수 없는 정보여서 0.65 → 0.70으로 올랐다.
+
+**결론**: 피처 엔지니어링의 가치는 "모델이 스스로 발견할 수 없는 정보를 만들어주는 것"에 있다. 이 경험이 딥러닝(NCF, SASRec)을 공부하게 된 계기였다. 딥러닝은 행 간 관계까지 자동으로 학습하기 때문이다.
+
+---
+
+## 프로젝트 구조
 
 ```
 kkbox/
 ├── eda.py                    # 탐색적 데이터 분석 (시각화 10종)
 ├── pipeline.py               # v1 기본 파이프라인
-├── pipeline_v3.py             # v3 Source 피처 추가
-├── pipeline_v4.py             # v4 Target Encoding (누수 발생 버전)
-├── pipeline_v5.py             # v5 OOF Target Encoding (누수 해결)
-├── pipeline_v7.py             # v7 시퀀스 피처 추가
+├── pipeline_v3.py             # v3 Source 피처
+├── pipeline_v4.py             # v4 Target Encoding (누수 버전)
+├── pipeline_v5.py             # v5 OOF Target Encoding (해결)
+├── pipeline_v7.py             # v7 시퀀스 피처
 ├── pipeline_v8.py             # v8 SVD 임베딩 (최종)
-├── pipeline_v9_experiment.py  # v9 실험 (Song2Vec)
+├── pipeline_v9_experiment.py  # v9 Song2Vec 실험
 ├── song2vec_study.py          # Song2Vec 학습 스크립트
-└── eda_output/                # EDA 시각화 결과
+└── eda_output/                # EDA 시각화 결과 (PNG)
 ```
 
 ---
 
-## 🔧 기술 스택
+## 기술 스택
 
-- **모델**: LightGBM (gbdt, 2000 trees, lr=0.1)
-- **검증**: 5-Fold Stratified CV
-- **피처**: OOF Target Encoding, SVD 임베딩, 시퀀스 피처
+- **모델**: LightGBM (gbdt, 2000 trees, learning_rate=0.1)
+- **검증**: 5-Fold Stratified CV + Kaggle Public LB
+- **피처**: OOF Target Encoding, TruncatedSVD (32차원), 시퀀스 피처
 - **라이브러리**: pandas, numpy, scikit-learn, lightgbm, scipy
 
 ---
 
-## 💡 느낀 점
+## 관련 프로젝트
 
-- **데이터 누수는 실전에서만 드러난다**: local 점수만 보고 자만하면 안 됨
-- **피처의 질이 모델의 양보다 중요**: 트리 2000개→4000개보다 SVD 32차원 하나가 효과적
-- **추천 문제는 Cold Start가 핵심**: 신규 유저/곡에 대한 대응이 성능을 좌우함
-- → 이 한계를 넘기 위해 딥러닝(NCF, SASRec) 학습을 시작하게 된 계기
-
----
-
-## 🔗 관련 프로젝트
-
-- [음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recomender-lifecycle-based) — 개인 청취 데이터 기반 규칙 기반 추천
+- [음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recomender-lifecycle-based) — 이 대회에 참가하게 된 동기가 된 프로젝트
