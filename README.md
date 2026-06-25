@@ -2,7 +2,7 @@
 
 ## 동기
 
-[음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recomender-lifecycle-based) 프로젝트에서 사람이 직접 설계한 피처(스킵률 변화, 재생 빈도 추세 등)로 추천 알고리즘을 만들었지만, **실제로 이 접근이 얼마나 유효한지 정량적으로 검증할 수 없었다.** 서비스를 배포할 수 없으니 사용자 만족도를 측정할 방법이 없었기 때문이다.
+[음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recommender-lifecycle-based) 프로젝트에서 사람이 직접 설계한 피처(스킵률 변화, 재생 빈도 추세 등)로 추천 알고리즘을 만들었지만, **실제로 이 접근이 얼마나 유효한지 정량적으로 검증할 수 없었다.** 서비스를 배포할 수 없으니 사용자 만족도를 측정할 방법이 없었기 때문이다.
 
 이 한계를 보완하기 위해, 실제 대규모 음악 청취 데이터가 제공되는 [KKBox Music Recommendation Challenge](https://www.kaggle.com/c/kkbox-music-recommendation-challenge)에 참가했다. 목표는 두 가지였다:
 
@@ -154,4 +154,4 @@ kkbox/
 
 ## 관련 프로젝트
 
-- [음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recomender-lifecycle-based) — 이 대회에 참가하게 된 동기가 된 프로젝트
+- [음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recommender-lifecycle-based) — 이 대회에 참가하게 된 동기가 된 프로젝트
