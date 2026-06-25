@@ -17,3 +17,6 @@ __pycache__/
 # 시스템
 .DS_Store
 Thumbs.db
+
+# trained model weights (large binaries)
+*.pt
