@@ -230,6 +230,7 @@ kkbox/
 ├── sasrec_v4.py               # SASRec(Transformer) + LightGBM
 ├── sasrec_model.pt            # 학습된 SASRec 가중치 (53MB, 저장소 미포함 — 재현 시 생성)
 ├── song2vec_study.py          # Song2Vec 실험
+├── lecture_notes.md           # ML 이론 자작 노트 (선형대수·확률·회귀·트리)
 ├── deep_learning_notes.md     # 딥러닝 자작 학습 노트 (로지스틱 회귀→Transformer)
 └── eda_output/                # EDA 시각화 결과 (PNG)
 ```
@@ -249,4 +250,4 @@ kkbox/
 ## 관련 프로젝트
 
 - [음원 생애주기 추천 알고리즘](https://github.com/chamin1010a-droid/music-recommender-lifecycle-based) — 이 대회의 출발점이자, 여기서 얻은 교훈(누수 경계 · 학습된 표현의 힘 · '좋은 추천'의 잣대)이 되먹임되어 지금의 형태로 발전한 프로젝트.
-- [딥러닝 학습 노트](deep_learning_notes.md) — 로지스틱 회귀에서 Transformer까지, 이 대회의 NCF·SASRec 실험을 떠받친 자작 정리 노트.
+- [ML 이론 노트](lecture_notes.md) · [딥러닝 학습 노트](deep_learning_notes.md) — 선형대수·확률·회귀에서 Transformer까지, 이 대회와 음악 프로젝트를 떠받친 자작 학습 노트 2부작.
